@@ -22,6 +22,7 @@ public class SwiftFlutterBarcodeScannerPlugin: NSObject, FlutterPlugin, ScanBarc
     public static var isContinuousScan:Bool=false
     static var barcodeStream:FlutterEventSink?=nil
     public static var scanMode = ScanMode.QR.index
+    private var backgroundQueue: DispatchQueue = DispatchQueue(label: "com.myapp.barcodeScannerQueue", attributes: .concurrent)
     
     public static func register(with registrar: FlutterPluginRegistrar) {
         viewController = (UIApplication.shared.delegate?.window??.rootViewController)!
@@ -98,32 +99,37 @@ public class SwiftFlutterBarcodeScannerPlugin: NSObject, FlutterPlugin, ScanBarc
         
         if checkCameraAvailability(){
             if checkForCameraPermission() {
-                SwiftFlutterBarcodeScannerPlugin.viewController.present(controller
-                                                                        , animated: true) {
-                    
+                backgroundQueue.async {
+                    SwiftFlutterBarcodeScannerPlugin.viewController.present(controller
+                                                                            , animated: true) {
+                        
+                    }
                 }
-            }else {
-                AVCaptureDevice.requestAccess(for: .video) { success in
-                    DispatchQueue.main.async {
-                        if success {
-                            SwiftFlutterBarcodeScannerPlugin.viewController.present(controller
-                                                                                    , animated: true) {
+            } else {
+                backgroundQueue.async {
+                    AVCaptureDevice.requestAccess(for: .video) { success in
+                        DispatchQueue.main.async {
+                            if success {
+                                SwiftFlutterBarcodeScannerPlugin.viewController.present(controller
+                                                                                        , animated: true) {
+                                    
+                                }
+                            } else {
+                                let alert = UIAlertController(title: "Action needed", message: "Please grant camera permission to use barcode scanner", preferredStyle: .alert)
                                 
+                                alert.addAction(UIAlertAction(title: "Grant", style: .default, handler: { action in
+                                    UIApplication.shared.open(URL(string: UIApplication.openSettingsURLString)!)
+                                }))
+                                
+                                alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+                                
+                                SwiftFlutterBarcodeScannerPlugin.viewController.present(alert, animated: true)
                             }
-                        } else {
-                            let alert = UIAlertController(title: "Action needed", message: "Please grant camera permission to use barcode scanner", preferredStyle: .alert)
-                            
-                            alert.addAction(UIAlertAction(title: "Grant", style: .default, handler: { action in
-                                UIApplication.shared.open(URL(string: UIApplication.openSettingsURLString)!)
-                            }))
-                            
-                            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-                            
-                            SwiftFlutterBarcodeScannerPlugin.viewController.present(alert, animated: true)
                         }
                     }
-                }}
-        }else {
+                }
+            }
+        } else {
             showAlertDialog(title: "Unable to proceed", message: "Camera not available")
         }
     }
