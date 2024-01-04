@@ -110,10 +110,7 @@ public class SwiftFlutterBarcodeScannerPlugin: NSObject, FlutterPlugin, ScanBarc
                     AVCaptureDevice.requestAccess(for: .video) { success in
                         DispatchQueue.main.async {
                             if success {
-                                SwiftFlutterBarcodeScannerPlugin.viewController.present(controller
-                                                                                        , animated: true) {
-                                    
-                                }
+                               self.setupCaptureSession(controller: controller)
                             } else {
                                 let alert = UIAlertController(title: "Action needed", message: "Please grant camera permission to use barcode scanner", preferredStyle: .alert)
                                 
@@ -144,6 +141,52 @@ public class SwiftFlutterBarcodeScannerPlugin: NSObject, FlutterPlugin, ScanBarc
         let alertAction = UIAlertAction(title: "Ok", style: .default, handler: nil)
         alertController.addAction(alertAction)
         SwiftFlutterBarcodeScannerPlugin.viewController.present(alertController, animated: true, completion: nil)
+    }
+
+    private func setupCaptureSession(controller: BarcodeScannerViewController) {
+        let deviceDiscoverySession = AVCaptureDevice.DiscoverySession(deviceTypes: [.builtInWideAngleCamera], mediaType: AVMediaType.video, position: .back)
+
+        // Get the back-facing camera for capturing videos
+        guard let captureDevice = deviceDiscoverySession.devices.first else {
+            print("Failed to get the camera device")
+            return
+        }
+
+        do {
+            let input = try AVCaptureDeviceInput(device: captureDevice)
+
+            if captureSession.inputs.isEmpty {
+                captureSession.addInput(input)
+            }
+
+            let captureRectWidth = self.isOrientationPortrait ? (screenSize.width * 0.8) : (screenSize.height * 0.8)
+            captureMetadataOutput.rectOfInterest = CGRect(x: xCor, y: yCor, width: captureRectWidth, height: screenHeight)
+
+            if captureSession.outputs.isEmpty {
+                captureSession.addOutput(captureMetadataOutput)
+            }
+
+            captureMetadataOutput.setMetadataObjectsDelegate(self, queue: DispatchQueue.main)
+            captureMetadataOutput.metadataObjectTypes = supportedCodeTypes
+
+        } catch {
+            print(error)
+            return
+        }
+
+        videoPreviewLayer = AVCaptureVideoPreviewLayer(session: captureSession)
+        videoPreviewLayer?.videoGravity = AVLayerVideoGravity.resizeAspectFill
+        videoPreviewLayer?.frame = controller.view.layer.bounds
+
+        controller.setVideoPreviewOrientation()
+
+        DispatchQueue.main.async {
+            controller.drawUIOverlays {
+                controller.moveVertically()
+            }
+        }
+
+        captureSession.startRunning()
     }
 }
 
